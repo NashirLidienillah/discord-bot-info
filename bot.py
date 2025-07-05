@@ -26,7 +26,7 @@ async def on_ready():
     print(f'Bot telah login sebagai {bot.user}')
     print('-----------------------------------------')
     
-    activity = discord.Activity(type=discord.ActivityType.watching, name="berita & gempa")
+    activity = discord.Activity(type=discord.ActivityType.watching, name="server HEYN4S")
     await bot.change_presence(status=discord.Status.online, activity=activity)
     print("Status bot berhasil diubah!")
 
@@ -168,6 +168,11 @@ async def cuaca(ctx, *, kota: str):
     except Exception as e:
         await ctx.respond(f"Gagal terhubung ke layanan cuaca. Error: {e}")
 
+
+# -> [BARU] Memuat semua file Cog dari folder 'cogs'
+for filename in os.listdir('./cogs'):
+    if filename.endswith('.py'):
+        bot.load_extension(f'cogs.{filename[:-3]}')
 
 # Menjalankan bot dengan token
 bot.run(TOKEN)
