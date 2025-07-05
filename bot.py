@@ -2,27 +2,26 @@ import os
 import discord
 import requests
 from dotenv import load_dotenv
-from discord.ext import tasks # -> [BARU] Impor modul untuk tugas berulang
+from discord.ext import tasks
 
-# --- Konfigurasi untuk Perintah /umumkan ---
-# Ganti dengan ID dari server HEYN4S
-ID_ROLE_PENGURUS = 1273619169908359238 
 # Muat environment variables dari file .env
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 WEATHER_API_KEY = os.getenv('WEATHER_API_KEY')
 NEWS_API_KEY = os.getenv('NEWS_API_KEY')
 
-# -> [BARU] Konfigurasi untuk notifikasi otomatis
-CHANNEL_ID_PENGUMUMAN = 1391188613793972254 # <<< GANTI DENGAN ID CHANNEL ANDA
-MAGNITUDE_THRESHOLD = 5.0 # Ambang batas magnitudo untuk notifikasi
-last_earthquake_time = "" # Variabel untuk menyimpan waktu gempa terakhir
+# --- Konfigurasi Bot ---
+# Ganti dengan ID dari server HEYN4S Anda
+ID_ROLE_PENGURUS = 1273619169908359238
+CHANNEL_ID_GEMPA = 1391188613793972254  # -> [PERBAIKAN] Variabel untuk notif gempa
+CHANNEL_ID_BERITA = 1391188613793972254 # Variabel untuk notif berita
+MAGNITUDE_THRESHOLD = 5.0
+last_earthquake_time = ""
+# -------------------------
 
-CHANNEL_ID_BERITA = 1391188613793972254
 # Inisialisasi bot
 bot = discord.Bot()
 
-# -> [BARU & DIPERBARUI] Event saat bot siap dan online
 @bot.event
 async def on_ready():
     """Fungsi yang dipanggil ketika bot berhasil terhubung ke Discord."""
@@ -35,9 +34,8 @@ async def on_ready():
 
     # Memulai semua loop otomatis
     check_for_earthquakes.start()
-    post_latest_news.start() # -> [BARU] Memulai loop pengecekan berita
+    post_latest_news.start()
     print("Semua loop otomatis telah dimulai.")
-
 
 # Loop untuk kirim info gempa tiap 5 menit
 @tasks.loop(minutes=5)
@@ -52,7 +50,7 @@ async def check_for_earthquakes():
         waktu_gempa_sekarang = gempa_terbaru['Jam']
         magnitude_sekarang = float(gempa_terbaru['Magnitude'])
         if waktu_gempa_sekarang != last_earthquake_time and magnitude_sekarang >= MAGNITUDE_THRESHOLD:
-            channel = bot.get_channel(CHANNEL_ID_GEMPA)
+            channel = bot.get_channel(CHANNEL_ID_GEMPA) # -> [PERBAIKAN] Menggunakan variabel yang benar
             if channel:
                 embed = discord.Embed(
                     title=f"🚨 PERINGATAN: Gempa Kuat Terdeteksi!",
@@ -69,7 +67,7 @@ async def check_for_earthquakes():
     except Exception as e:
         print(f"Terjadi error saat loop pengecekan gempa: {e}")
 
-# -> [BARU] Loop untuk memposting berita setiap 3 jam
+# Loop untuk memposting berita setiap 3 jam
 @tasks.loop(hours=3)
 async def post_latest_news():
     """Mengecek API berita dan mengirim 5 berita teratas ke channel."""
@@ -110,8 +108,8 @@ async def post_latest_news():
     except Exception as e:
         print(f"Terjadi error saat loop pengecekan berita: {e}")
 
+# --- Kumpulan Perintah Slash Command ---
 
-# Perintah Slash Command untuk info gempa (tidak berubah)
 @bot.slash_command(name="gempa", description="Menampilkan info gempa terkini dari BMKG.")
 async def gempa(ctx):
     url = "https://data.bmkg.go.id/DataMKG/TEWS/autogempa.json"
@@ -135,32 +133,23 @@ async def gempa(ctx):
     except Exception as e:
         await ctx.respond(f"Gagal mengambil data dari BMKG. Error: {e}")
 
-
-# Perintah Slash Command untuk info cuaca (tidak berubah)
 @bot.slash_command(name="cuaca", description="Menampilkan info cuaca di kota tertentu.")
-async def cuaca(ctx, *, kota: str):
+async def cuaca(ctx, kota: str):
     base_url = "http://api.openweathermap.org/data/2.5/weather"
     params = { 'q': kota, 'appid': WEATHER_API_KEY, 'units': 'metric', 'lang': 'id' }
     try:
         response = requests.get(base_url, params=params)
         data = response.json()
         if data['cod'] == 200:
-            nama_kota = data['name']
-            suhu = data['main']['temp']
-            terasa_seperti = data['main']['feels_like']
-            deskripsi = data['weather'][0]['description'].title()
-            kelembapan = data['main']['humidity']
-            icon_id = data['weather'][0]['icon']
-            icon_url = f"http://openweathermap.org/img/wn/{icon_id}@2x.png"
             embed = discord.Embed(
-                title=f"Cuaca di {nama_kota}",
-                description=f"**{deskripsi}**",
+                title=f"Cuaca di {data['name']}",
+                description=f"**{data['weather'][0]['description'].title()}**",
                 color=discord.Color.blue()
             )
-            embed.set_thumbnail(url=icon_url)
-            embed.add_field(name="Suhu", value=f"{suhu}°C", inline=True)
-            embed.add_field(name="Terasa Seperti", value=f"{terasa_seperti}°C", inline=True)
-            embed.add_field(name="Kelembapan", value=f"{kelembapan}%", inline=True)
+            embed.set_thumbnail(url=f"http://openweathermap.org/img/wn/{data['weather'][0]['icon']}@2x.png")
+            embed.add_field(name="Suhu", value=f"{data['main']['temp']}°C", inline=True)
+            embed.add_field(name="Terasa Seperti", value=f"{data['main']['feels_like']}°C", inline=True)
+            embed.add_field(name="Kelembapan", value=f"{data['main']['humidity']}%", inline=True)
             embed.set_footer(text="Data disediakan oleh OpenWeatherMap | Bot untuk HEYN4S")
             await ctx.respond(embed=embed)
         else:
@@ -168,8 +157,6 @@ async def cuaca(ctx, *, kota: str):
     except Exception as e:
         await ctx.respond(f"Gagal terhubung ke layanan cuaca. Error: {e}")
 
-
-# -> [DIPERBARUI] Perintah untuk membuat pengumuman kustom dengan pilihan channel
 @bot.slash_command(name="umumkan", description="Kirim pengumuman kustom ke channel yang kamu pilih.")
 async def umumkan(
     ctx,
@@ -177,18 +164,11 @@ async def umumkan(
     judul: discord.Option(str, "Tulis judul pengumuman.", required=True),
     pesan: discord.Option(str, "Tulis isi pesan pengumuman. Gunakan '\\n' untuk baris baru.", required=True)
 ):
-    """
-    Mengirim pesan embed kustom ke channel yang dipilih.
-    Hanya bisa digunakan oleh pengguna dengan role tertentu.
-    """
-    # --- Pemeriksaan Hak Akses ---
+    """Mengirim pesan embed kustom ke channel yang dipilih."""
     allowed_role = discord.utils.get(ctx.author.roles, id=ID_ROLE_PENGURUS)
-    
     if not allowed_role and ctx.author.id != ctx.guild.owner_id:
         return await ctx.respond("Maaf, kamu tidak punya izin untuk menggunakan perintah ini.", ephemeral=True)
-    # -----------------------------
 
-    # Memeriksa apakah bot punya izin untuk mengirim pesan di channel yang dipilih
     permissions = channel.permissions_for(ctx.guild.me)
     if not permissions.send_messages or not permissions.embed_links:
         return await ctx.respond(
@@ -196,10 +176,7 @@ async def umumkan(
             ephemeral=True
         )
 
-    # Mengganti karakter '\n' dari input menjadi baris baru sungguhan
     pesan_formatted = pesan.replace('\\n', '\n')
-
-    # Membuat embed pengumuman
     embed = discord.Embed(
         title=f"📢 {judul}",
         description=pesan_formatted,
@@ -209,15 +186,11 @@ async def umumkan(
     embed.timestamp = discord.utils.utcnow()
 
     try:
-        # Kirim embed ke channel yang dipilih oleh pengguna
         await channel.send(embed=embed)
-        # Kirim konfirmasi berhasil ke pengguna
         await ctx.respond(f"✅ Pengumuman berhasil dikirim ke channel **#{channel.name}**!", ephemeral=True)
     except Exception as e:
         print(f"Gagal mengirim pengumuman: {e}")
         await ctx.respond(f"Terjadi error saat mengirim pengumuman: {e}", ephemeral=True)
-
-
 
 # Menjalankan bot dengan token
 bot.run(TOKEN)
