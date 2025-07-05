@@ -169,10 +169,6 @@ async def cuaca(ctx, *, kota: str):
         await ctx.respond(f"Gagal terhubung ke layanan cuaca. Error: {e}")
 
 
-# -> [BARU] Memuat semua file Cog dari folder 'cogs'
-for filename in os.listdir('./cogs'):
-    if filename.endswith('.py'):
-        bot.load_extension(f'cogs.{filename[:-3]}')
 
 # Menjalankan bot dengan token
 bot.run(TOKEN)
