@@ -8,12 +8,14 @@ from discord.ext import tasks # -> [BARU] Impor modul untuk tugas berulang
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 WEATHER_API_KEY = os.getenv('WEATHER_API_KEY')
+NEWS_API_KEY = os.getenv('NEWS_API_KEY')
 
 # -> [BARU] Konfigurasi untuk notifikasi otomatis
 CHANNEL_ID_PENGUMUMAN = 1391188613793972254 # <<< GANTI DENGAN ID CHANNEL ANDA
 MAGNITUDE_THRESHOLD = 5.0 # Ambang batas magnitudo untuk notifikasi
 last_earthquake_time = "" # Variabel untuk menyimpan waktu gempa terakhir
 
+CHANNEL_ID_BERITA = 1391188613793972254
 # Inisialisasi bot
 bot = discord.Bot()
 
@@ -24,63 +26,89 @@ async def on_ready():
     print(f'Bot telah login sebagai {bot.user}')
     print('-----------------------------------------')
     
-    # -> [BARU] Mengatur status aktivitas bot
-    activity = discord.Activity(type=discord.ActivityType.watching, name="data BMKG")
+    activity = discord.Activity(type=discord.ActivityType.watching, name="berita & gempa")
     await bot.change_presence(status=discord.Status.online, activity=activity)
     print("Status bot berhasil diubah!")
 
-    # -> [BARU] Memulai loop pengecekan gempa
+    # Memulai semua loop otomatis
     check_for_earthquakes.start()
-    print("Loop pengecekan gempa otomatis telah dimulai.")
+    post_latest_news.start() # -> [BARU] Memulai loop pengecekan berita
+    print("Semua loop otomatis telah dimulai.")
 
 
-# -> [BARU] Tugas berulang untuk mengecek gempa setiap 2 menit
-@tasks.loop(minutes=2)
+# Loop untuk kirim info gempa tiap 5 menit
+@tasks.loop(minutes=5)
 async def check_for_earthquakes():
-    """Mengecek API BMKG secara berkala dan mengirim notifikasi jika ada gempa kuat baru."""
     global last_earthquake_time
+    # ... (kode loop gempa dari sebelumnya, tidak perlu diubah) ...
+    # ... (untuk keringkasan, kode ini tidak ditampilkan ulang di sini) ...
+    # Pastikan kode loop gempa Anda yang sebelumnya ada di sini
     url = "https://data.bmkg.go.id/DataMKG/TEWS/autogempa.json"
-    
     try:
         response = requests.get(url)
         response.raise_for_status()
         data = response.json()
-        
         gempa_terbaru = data['Infogempa']['gempa']
         waktu_gempa_sekarang = gempa_terbaru['Jam']
         magnitude_sekarang = float(gempa_terbaru['Magnitude'])
-
-        # Cek jika ini adalah gempa BARU dan magnitudonya di atas ambang batas
         if waktu_gempa_sekarang != last_earthquake_time and magnitude_sekarang >= MAGNITUDE_THRESHOLD:
-            print(f"Gempa baru terdeteksi! Magnitudo: {magnitude_sekarang}, Waktu: {waktu_gempa_sekarang}")
-            
-            # Dapatkan objek channel dari ID yang sudah kita siapkan
-            channel = bot.get_channel(CHANNEL_ID_PENGUMUMAN)
-            
+            channel = bot.get_channel(CHANNEL_ID_GEMPA)
             if channel:
-                # Membuat embed message
                 embed = discord.Embed(
                     title=f"🚨 PERINGATAN: Gempa Kuat Terdeteksi!",
                     description=f"**Lokasi: {gempa_terbaru['Wilayah']}**",
                     color=discord.Color.brand_red()
                 )
-                embed.set_thumbnail(url="https://cdn.icon-icons.com/icons2/272/PNG/512/EQ_earthquake_3010.png")
                 embed.add_field(name="Waktu", value=f"{gempa_terbaru['Tanggal']} {gempa_terbaru['Jam']}", inline=False)
                 embed.add_field(name="Magnitudo", value=f"{gempa_terbaru['Magnitude']} SR", inline=True)
                 embed.add_field(name="Kedalaman", value=gempa_terbaru['Kedalaman'], inline=True)
                 embed.add_field(name="Potensi", value=gempa_terbaru['Potensi'], inline=False)
                 embed.set_footer(text="Data disediakan oleh BMKG | Bot untuk HEYN4S")
-                
-                # Kirim pesan ke channel pengumuman
                 await channel.send(embed=embed)
-                
-                # Perbarui waktu gempa terakhir agar tidak mengirim notifikasi yang sama berulang kali
                 last_earthquake_time = waktu_gempa_sekarang
-            else:
-                print(f"Error: Channel dengan ID {CHANNEL_ID_PENGUMUMAN} tidak ditemukan.")
-
     except Exception as e:
         print(f"Terjadi error saat loop pengecekan gempa: {e}")
+
+# -> [BARU] Loop untuk memposting berita setiap 3 jam
+@tasks.loop(hours=3)
+async def post_latest_news():
+    """Mengecek API berita dan mengirim 5 berita teratas ke channel."""
+    print("Memeriksa berita terkini...")
+    if not NEWS_API_KEY:
+        print("Error: News API Key tidak diatur untuk loop berita.")
+        return
+
+    channel = bot.get_channel(CHANNEL_ID_BERITA)
+    if not channel:
+        print(f"Error: Channel berita dengan ID {CHANNEL_ID_BERITA} tidak ditemukan.")
+        return
+
+    url = f"https://newsapi.org/v2/top-headlines?country=id&pageSize=5&apiKey={NEWS_API_KEY}"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+
+        if data['status'] == 'ok' and data['articles']:
+            embed = discord.Embed(
+                title="🇮🇩 5 Berita Terkini Indonesia",
+                color=discord.Color.dark_blue()
+            )
+            description = ""
+            for i, article in enumerate(data['articles'], 1):
+                description += f"**{i}. [{article['title']}]({article['url']})**\n"
+                description += f"*Sumber: {article['source']['name']}*\n\n"
+            
+            embed.description = description
+            embed.set_footer(text="Didukung oleh NewsAPI.org | Update setiap 3 jam")
+            
+            await channel.send(embed=embed)
+            print("Berita terkini berhasil diposting.")
+        else:
+            print("Gagal memproses data berita, status bukan 'ok' atau tidak ada artikel.")
+
+    except Exception as e:
+        print(f"Terjadi error saat loop pengecekan berita: {e}")
 
 
 # Perintah Slash Command untuk info gempa (tidak berubah)
