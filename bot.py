@@ -4,6 +4,9 @@ import requests
 from dotenv import load_dotenv
 from discord.ext import tasks # -> [BARU] Impor modul untuk tugas berulang
 
+# --- Konfigurasi untuk Perintah /umumkan ---
+# Ganti dengan ID dari server HEYN4S
+ID_ROLE_PENGURUS = 1273619169908359238 
 # Muat environment variables dari file .env
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -40,9 +43,6 @@ async def on_ready():
 @tasks.loop(minutes=5)
 async def check_for_earthquakes():
     global last_earthquake_time
-    # ... (kode loop gempa dari sebelumnya, tidak perlu diubah) ...
-    # ... (untuk keringkasan, kode ini tidak ditampilkan ulang di sini) ...
-    # Pastikan kode loop gempa Anda yang sebelumnya ada di sini
     url = "https://data.bmkg.go.id/DataMKG/TEWS/autogempa.json"
     try:
         response = requests.get(url)
@@ -167,6 +167,55 @@ async def cuaca(ctx, *, kota: str):
             await ctx.respond(f"Tidak dapat menemukan cuaca untuk kota **{kota}**. Mohon periksa kembali nama kota.")
     except Exception as e:
         await ctx.respond(f"Gagal terhubung ke layanan cuaca. Error: {e}")
+
+
+# -> [DIPERBARUI] Perintah untuk membuat pengumuman kustom dengan pilihan channel
+@bot.slash_command(name="umumkan", description="Kirim pengumuman kustom ke channel yang kamu pilih.")
+async def umumkan(
+    ctx,
+    channel: discord.Option(discord.TextChannel, "Pilih channel tujuan pengumuman.", required=True),
+    judul: discord.Option(str, "Tulis judul pengumuman.", required=True),
+    pesan: discord.Option(str, "Tulis isi pesan pengumuman. Gunakan '\\n' untuk baris baru.", required=True)
+):
+    """
+    Mengirim pesan embed kustom ke channel yang dipilih.
+    Hanya bisa digunakan oleh pengguna dengan role tertentu.
+    """
+    # --- Pemeriksaan Hak Akses ---
+    allowed_role = discord.utils.get(ctx.author.roles, id=ID_ROLE_PENGURUS)
+    
+    if not allowed_role and ctx.author.id != ctx.guild.owner_id:
+        return await ctx.respond("Maaf, kamu tidak punya izin untuk menggunakan perintah ini.", ephemeral=True)
+    # -----------------------------
+
+    # Memeriksa apakah bot punya izin untuk mengirim pesan di channel yang dipilih
+    permissions = channel.permissions_for(ctx.guild.me)
+    if not permissions.send_messages or not permissions.embed_links:
+        return await ctx.respond(
+            f"Maaf, aku tidak punya izin untuk mengirim pesan atau embed di channel **#{channel.name}**.",
+            ephemeral=True
+        )
+
+    # Mengganti karakter '\n' dari input menjadi baris baru sungguhan
+    pesan_formatted = pesan.replace('\\n', '\n')
+
+    # Membuat embed pengumuman
+    embed = discord.Embed(
+        title=f"📢 {judul}",
+        description=pesan_formatted,
+        color=discord.Color.gold()
+    )
+    embed.set_footer(text=f"Pengumuman dari: {ctx.author.display_name}")
+    embed.timestamp = discord.utils.utcnow()
+
+    try:
+        # Kirim embed ke channel yang dipilih oleh pengguna
+        await channel.send(embed=embed)
+        # Kirim konfirmasi berhasil ke pengguna
+        await ctx.respond(f"✅ Pengumuman berhasil dikirim ke channel **#{channel.name}**!", ephemeral=True)
+    except Exception as e:
+        print(f"Gagal mengirim pengumuman: {e}")
+        await ctx.respond(f"Terjadi error saat mengirim pengumuman: {e}", ephemeral=True)
 
 
 
