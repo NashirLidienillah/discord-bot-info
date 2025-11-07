@@ -24,7 +24,7 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 try:
     genai.configure(api_key=GEMINI_API_KEY)
-    gemini_model = genai.GenerativeModel('gemini-pro') 
+    gemini_model = genai.GenerativeModel('gemini-1.0-pro') 
     print("Model AI (Gemini) berhasil dikonfigurasi.")
 except Exception as e:
     print(f"ERROR: Gagal mengkonfigurasi Gemini AI: {e}")
