@@ -2,3 +2,4 @@ py-cord
 google-generativeai
 python-dotenv
 flask
+openai
