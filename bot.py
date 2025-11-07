@@ -101,9 +101,9 @@ async def on_message(message):
                 try:
                     print(f"Mencoba Groq untuk: {pertanyaan}")
                     response = groq_client.chat.completions.create(
-                        model="llama3-8b-8192", # Model Llama 3 yang cepat
-                        messages=[{"role": "user", "content": pertanyaan}]
-                    )
+                    model="mixtral-8x7b-32768", 
+                    messages=[{"role": "user", "content": pertanyaan}]
+                )
                     if response.choices and response.choices[0].message.content:
                         jawaban_ai = response.choices[0].message.content
                         sumber_ai = "Groq (Llama 3)"
