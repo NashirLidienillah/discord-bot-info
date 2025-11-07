@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 from flask import Flask
 from threading import Thread
 
-# --- Konfigurasi Web Server (Keep-Alive) ---
 app = Flask('')
 @app.route('/')
 def home():
@@ -18,18 +17,13 @@ def run_server():
 def start_keep_alive():
     t = Thread(target=run_server)
     t.start()
-# --- Akhir Web Server ---
-
-# --- Muat Konfigurasi Bot ---
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY') # <-- TAMBAHAN BARU
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY') 
 
-# --- Konfigurasi AI (Gemini) ---
 try:
     genai.configure(api_key=GEMINI_API_KEY)
-    # PERBAIKAN: Mengganti ke 'gemini-pro' yang lebih stabil
     gemini_model = genai.GenerativeModel('gemini-pro') 
     print("Model AI (Gemini) berhasil dikonfigurasi.")
 except Exception as e:
@@ -74,44 +68,60 @@ async def on_message(message):
         if not pertanyaan:
             return
 
-        # Tampilkan "Bot is typing..."
         async with message.channel.typing():
             jawaban_ai = None
             sumber_ai = "Tidak diketahui"
+            error_gemini_msg = "" # Untuk menyimpan error
 
-            # --- LOGIKA FALLBACK BARU ---
-            
             # 1. Coba Gemini Terlebih Dahulu
             if gemini_model:
                 try:
                     print(f"Mencoba Gemini untuk: {pertanyaan}")
                     response = await gemini_model.generate_content_async(pertanyaan)
-                    jawaban_ai = response.text
+                    
+                    # --- PENGECEKAN BARU (ANTI-CRASH) ---
+                    # Cek jika respons diblokir atau kosong
+                    if response.parts:
+                        jawaban_ai = response.text
+                    else:
+                        jawaban_ai = None # Paksa fallback jika respons kosong
+                        print("Peringatan: Respons Gemini kosong (mungkin difilter).")
+                    # --- AKHIR PENGECEKAN ---
+
                     sumber_ai = "Gemini"
                 except Exception as e_gemini:
                     print(f"ERROR Gemini Gagal: {e_gemini}")
-                    jawaban_ai = None # Pastikan jawaban kosong agar fallback terpicu
+                    error_gemini_msg = str(e_gemini) # Simpan pesan error
+                    jawaban_ai = None 
 
-            # 2. Jika Gemini Gagal (atau tidak ada), Coba OpenAI
+            # 2. Jika Gemini Gagal (jawaban_ai masih None), Coba OpenAI
             if jawaban_ai is None and OPENAI_API_KEY:
                 try:
                     print(f"Gemini gagal, mencoba fallback OpenAI...")
                     response = openai.chat.completions.create(
-                        model="gpt-3.5-turbo", # Model ChatGPT yang cepat & murah
+                        model="gpt-3.5-turbo",
                         messages=[
                             {"role": "system", "content": "You are a helpful assistant."},
                             {"role": "user", "content": pertanyaan}
                         ]
                     )
-                    jawaban_ai = response.choices[0].message.content
+                    
+                    # --- PENGECEKAN BARU (ANTI-CRASH) ---
+                    if response.choices and response.choices[0].message.content:
+                        jawaban_ai = response.choices[0].message.content
+                    else:
+                        jawaban_ai = None # Respons OpenAI juga kosong
+                        print("Peringatan: Respons OpenAI kosong (mungkin difilter).")
+                    # --- AKHIR PENGECEKAN ---
+
                     sumber_ai = "ChatGPT"
                 except Exception as e_openai:
                     print(f"ERROR OpenAI Gagal: {e_openai}")
-                    jawaban_ai = f"Maaf, kedua AI (Gemini dan ChatGPT) sedang bermasalah.\n`Gemini Error: {e_gemini}`\n`ChatGPT Error: {e_openai}`"
+                    jawaban_ai = f"Maaf, kedua AI (Gemini dan ChatGPT) sedang bermasalah.\n`Gemini Error: {error_gemini_msg}`\n`ChatGPT Error: {e_openai}`"
 
-            # 3. Jika Keduanya Tidak Dikonfigurasi
-            if jawaban_ai is None:
-                jawaban_ai = "Maaf, tidak ada layanan AI yang dikonfigurasi. Hubungi admin."
+            # 3. Jika Keduanya Gagal atau Respons Kosong
+            if jawaban_ai is None or jawaban_ai.isspace():
+                jawaban_ai = "Maaf, AI tidak memberikan respons yang valid. Ini mungkin karena filter keamanan atau pertanyaan yang terlalu singkat."
 
             # --- Akhir Logika Fallback ---
 
@@ -124,11 +134,17 @@ async def on_message(message):
                 )
                 embed.add_field(
                     name=f"🤖 Jawaban dari {sumber_ai}:",
-                    value=jawaban_ai[:4000], # Batasi jawaban
+                    value=jawaban_ai[:4000], 
                     inline=False
                 )
                 embed.set_footer(text=f"Dijawab untuk: {message.author.display_name}")
                 await message.reply(embed=embed)
+            
+            # Ini akan menangkap error "Missing Permissions" (Embed Links)
+            except discord.errors.Forbidden:
+                print("ERROR: Bot tidak punya izin 'Embed Links'. Mengirim sebagai teks biasa.")
+                await message.reply(f"**Jawaban dari {sumber_ai}:**\n{jawaban_ai[:1900]}")
+            
             except Exception as e_send:
                 print(f"Error mengirim pesan Discord: {e_send}")
                 await message.reply("Maaf, terjadi kesalahan saat menampilkan jawaban.")
