@@ -4,5 +4,3 @@ python-dotenv
 discord
 google-generativeai
 flask
-python-dotenv
-gunicorn
