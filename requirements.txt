@@ -1,6 +1,4 @@
 py-cord
-requests
-python-dotenv
-discord
 google-generativeai
 flask
+python-dotenv
