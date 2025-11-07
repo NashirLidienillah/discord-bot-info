@@ -2,11 +2,13 @@ import os
 import discord
 import google.generativeai as genai
 import openai
+import groq  # <-- IMPORT BARU
 from discord.ext import commands
 from dotenv import load_dotenv
 from flask import Flask
 from threading import Thread
 
+# --- Konfigurasi Web Server (Keep-Alive) ---
 app = Flask('')
 @app.route('/')
 def home():
@@ -17,29 +19,49 @@ def run_server():
 def start_keep_alive():
     t = Thread(target=run_server)
     t.start()
+# --- Akhir Web Server ---
+
+# --- Muat Konfigurasi Bot ---
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY') 
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+GROQ_API_KEY = os.getenv('GROQ_API_KEY') # <-- KEY BARU
 
+# --- Konfigurasi AI (Gemini) ---
 try:
     genai.configure(api_key=GEMINI_API_KEY)
-    gemini_model = genai.GenerativeModel('gemini-1.0-pro') 
+    gemini_model = genai.GenerativeModel('gemini-1.0-pro') # Model stabil
     print("Model AI (Gemini) berhasil dikonfigurasi.")
 except Exception as e:
     print(f"ERROR: Gagal mengkonfigurasi Gemini AI: {e}")
     gemini_model = None
 
-# --- Konfigurasi AI (OpenAI / ChatGPT) ---
+# --- Konfigurasi AI (OpenAI) ---
 try:
     if OPENAI_API_KEY:
-        openai.api_key = OPENAI_API_KEY
+        openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
         print("Model AI (OpenAI) berhasil dikonfigurasi.")
     else:
-        print("PERINGATAN: OPENAI_API_KEY tidak diatur. Fallback ChatGPT dinonaktifkan.")
+        openai_client = None
+        print("PERINGATAN: OPENAI_API_KEY tidak diatur.")
 except Exception as e:
     print(f"ERROR: Gagal mengkonfigurasi OpenAI: {e}")
+    openai_client = None
+
+# --- Konfigurasi AI (Groq) ---
+try:
+    if GROQ_API_KEY:
+        groq_client = groq.Groq(api_key=GROQ_API_KEY)
+        print("Model AI (Groq) berhasil dikonfigurasi.")
+    else:
+        groq_client = None
+        print("PERINGATAN: GROQ_API_KEY tidak diatur.")
+except Exception as e:
+    print(f"ERROR: Gagal mengkonfigurasi Groq: {e}")
+    groq_client = None
 # --- Akhir Konfigurasi ---
+
 
 # --- Inisialisasi Bot ---
 intents = discord.Intents.default()
@@ -52,10 +74,9 @@ async def on_ready():
     print('-----------------------------------------')
     activity = discord.Activity(type=discord.ActivityType.listening, name="perintah !")
     await bot.change_presence(status=discord.Status.online, activity=activity)
-    if gemini_model:
-        print("Bot AI (Gemini) siap digunakan.")
-    if OPENAI_API_KEY:
-        print("Bot AI (OpenAI Fallback) siap digunakan.")
+    if groq_client: print("Bot AI (Groq) siap digunakan.")
+    if gemini_model: print("Bot AI (Gemini Fallback) siap digunakan.")
+    if openai_client: print("Bot AI (OpenAI Fallback) siap digunakan.")
 
 # --- LOGIKA BARU: Menangani Pesan (Prefix '!') ---
 @bot.event
@@ -71,59 +92,59 @@ async def on_message(message):
         async with message.channel.typing():
             jawaban_ai = None
             sumber_ai = "Tidak diketahui"
-            error_gemini_msg = "" # Untuk menyimpan error
+            error_log = {} # Untuk menyimpan semua error
 
-            # 1. Coba Gemini Terlebih Dahulu
-            if gemini_model:
+            # --- LOGIKA PRIORITAS AI ---
+            
+            # 1. Prioritas 1: Coba Groq (Cepat & Gratis)
+            if groq_client:
                 try:
-                    print(f"Mencoba Gemini untuk: {pertanyaan}")
-                    response = await gemini_model.generate_content_async(pertanyaan)
-                    
-                    # --- PENGECEKAN BARU (ANTI-CRASH) ---
-                    # Cek jika respons diblokir atau kosong
-                    if response.parts:
-                        jawaban_ai = response.text
-                    else:
-                        jawaban_ai = None # Paksa fallback jika respons kosong
-                        print("Peringatan: Respons Gemini kosong (mungkin difilter).")
-                    # --- AKHIR PENGECEKAN ---
-
-                    sumber_ai = "Gemini"
-                except Exception as e_gemini:
-                    print(f"ERROR Gemini Gagal: {e_gemini}")
-                    error_gemini_msg = str(e_gemini) # Simpan pesan error
-                    jawaban_ai = None 
-
-            # 2. Jika Gemini Gagal (jawaban_ai masih None), Coba OpenAI
-            if jawaban_ai is None and OPENAI_API_KEY:
-                try:
-                    print(f"Gemini gagal, mencoba fallback OpenAI...")
-                    response = openai.chat.completions.create(
-                        model="gpt-3.5-turbo",
-                        messages=[
-                            {"role": "system", "content": "You are a helpful assistant."},
-                            {"role": "user", "content": pertanyaan}
-                        ]
+                    print(f"Mencoba Groq untuk: {pertanyaan}")
+                    response = groq_client.chat.completions.create(
+                        model="llama3-8b-8192", # Model Llama 3 yang cepat
+                        messages=[{"role": "user", "content": pertanyaan}]
                     )
-                    
-                    # --- PENGECEKAN BARU (ANTI-CRASH) ---
                     if response.choices and response.choices[0].message.content:
                         jawaban_ai = response.choices[0].message.content
-                    else:
-                        jawaban_ai = None # Respons OpenAI juga kosong
-                        print("Peringatan: Respons OpenAI kosong (mungkin difilter).")
-                    # --- AKHIR PENGECEKAN ---
+                        sumber_ai = "Groq (Llama 3)"
+                except Exception as e_groq:
+                    print(f"ERROR Groq Gagal: {e_groq}")
+                    error_log['Groq'] = str(e_groq)
 
-                    sumber_ai = "ChatGPT"
+            # 2. Jika Groq Gagal, Coba Gemini
+            if jawaban_ai is None and gemini_model:
+                try:
+                    print(f"Groq gagal, mencoba fallback Gemini...")
+                    response = await gemini_model.generate_content_async(pertanyaan)
+                    if response.parts:
+                        jawaban_ai = response.text
+                        sumber_ai = "Gemini"
+                    else:
+                        print("Peringatan: Respons Gemini kosong (filter).")
+                except Exception as e_gemini:
+                    print(f"ERROR Gemini Gagal: {e_gemini}")
+                    error_log['Gemini'] = str(e_gemini)
+
+            # 3. Jika Gemini Gagal, Coba OpenAI
+            if jawaban_ai is None and openai_client:
+                try:
+                    print(f"Gemini gagal, mencoba fallback OpenAI...")
+                    response = openai_client.chat.completions.create(
+                        model="gpt-3.5-turbo",
+                        messages=[{"role": "user", "content": pertanyaan}]
+                    )
+                    if response.choices and response.choices[0].message.content:
+                        jawaban_ai = response.choices[0].message.content
+                        sumber_ai = "ChatGPT"
                 except Exception as e_openai:
                     print(f"ERROR OpenAI Gagal: {e_openai}")
-                    jawaban_ai = f"Maaf, kedua AI (Gemini dan ChatGPT) sedang bermasalah.\n`Gemini Error: {error_gemini_msg}`\n`ChatGPT Error: {e_openai}`"
+                    error_log['OpenAI'] = str(e_openai)
 
-            # 3. Jika Keduanya Gagal atau Respons Kosong
+            # 4. Jika Semua Gagal
             if jawaban_ai is None or jawaban_ai.isspace():
-                jawaban_ai = "Maaf, AI tidak memberikan respons yang valid. Ini mungkin karena filter keamanan atau pertanyaan yang terlalu singkat."
-
-            # --- Akhir Logika Fallback ---
+                jawaban_ai = f"Maaf, semua layanan AI sedang bermasalah atau tidak dikonfigurasi.\n`Error Groq: {error_log.get('Groq', 'N/A')}`\n`Error Gemini: {error_log.get('Gemini', 'N/A')}`\n`Error OpenAI: {error_log.get('OpenAI', 'N/A')}`"
+                sumber_ai = "Sistem"
+            # --- Akhir Logika ---
 
             # Kirim Jawaban
             try:
@@ -134,21 +155,18 @@ async def on_message(message):
                 )
                 embed.add_field(
                     name=f"🤖 Jawaban dari {sumber_ai}:",
-                    value=jawaban_ai[:4000], 
+                    value=jawaban_ai[:4000],
                     inline=False
                 )
                 embed.set_footer(text=f"Dijawab untuk: {message.author.display_name}")
                 await message.reply(embed=embed)
             
-            # Ini akan menangkap error "Missing Permissions" (Embed Links)
             except discord.errors.Forbidden:
                 print("ERROR: Bot tidak punya izin 'Embed Links'. Mengirim sebagai teks biasa.")
                 await message.reply(f"**Jawaban dari {sumber_ai}:**\n{jawaban_ai[:1900]}")
-            
             except Exception as e_send:
                 print(f"Error mengirim pesan Discord: {e_send}")
-                await message.reply("Maaf, terjadi kesalahan saat menampilkan jawaban.")
-                
+
     await bot.process_commands(message)
 
 # --- Menjalankan Bot DAN Web Server ---
