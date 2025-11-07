@@ -1,4 +1,4 @@
-py-cord
+py-cord-core
 google-generativeai
 flask
 python-dotenv
