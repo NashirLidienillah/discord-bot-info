@@ -8,8 +8,6 @@ from dotenv import load_dotenv
 from flask import Flask
 from threading import Thread
 
-# --- Konfigurasi Web Server (Keep-Alive) ---
-# (Ini biarkan saja, sudah benar)
 app = Flask('')
 @app.route('/')
 def home():
@@ -22,14 +20,13 @@ def start_keep_alive():
     t.start()
 # --- Akhir Web Server ---
 
-# --- Muat Konfigurasi Bot ---
+# --- Muat Konfigurasi Bot & AI ---
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 GROQ_API_KEY = os.getenv('GROQ_API_KEY') 
 
-# --- Konfigurasi AI (Gemini) ---
 try:
     genai.configure(api_key=GEMINI_API_KEY)
     gemini_model = genai.GenerativeModel('gemini-1.0-pro')
@@ -37,27 +34,21 @@ try:
 except Exception as e:
     print(f"ERROR: Gagal mengkonfigurasi Gemini AI: {e}")
     gemini_model = None
-
-# --- Konfigurasi AI (OpenAI) ---
 try:
     if OPENAI_API_KEY:
         openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
         print("Model AI (OpenAI) berhasil dikonfigurasi.")
     else:
         openai_client = None
-        print("PERINGATAN: OPENAI_API_KEY tidak diatur.")
 except Exception as e:
     print(f"ERROR: Gagal mengkonfigurasi OpenAI: {e}")
     openai_client = None
-
-# --- Konfigurasi AI (Groq) ---
 try:
     if GROQ_API_KEY:
         groq_client = groq.Groq(api_key=GROQ_API_KEY)
         print("Model AI (Groq) berhasil dikonfigurasi.")
     else:
         groq_client = None
-        print("PERINGATAN: GROQ_API_KEY tidak diatur.")
 except Exception as e:
     print(f"ERROR: Gagal mengkonfigurasi Groq: {e}")
     groq_client = None
@@ -67,63 +58,90 @@ except Exception as e:
 # --- Inisialisasi Bot ---
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents, help_command=None) 
 
 @bot.event
 async def on_ready():
     print(f'Bot telah login sebagai {bot.user}')
     print('-----------------------------------------')
-    activity = discord.Activity(type=discord.ActivityType.listening, name="perintah !")
+    activity = discord.Activity(type=discord.ActivityType.listening, name="perintah / dan !")
     await bot.change_presence(status=discord.Status.online, activity=activity)
-    if groq_client: print("Bot AI (Groq) siap digunakan.")
-    if gemini_model: print("Bot AI (Gemini Fallback) siap digunakan.")
-    if openai_client: print("Bot AI (OpenAI Fallback) siap digunakan.")
 
-# --- ⬇️ FITUR BARU: PERINTAH INFO KUSTOM ⬇️ ---
-
-@bot.command(name="ping")
-async def ping(ctx):
-    """Cek latensi dan status bot."""
+@bot.slash_command(name="ping", description="Cek latensi dan status bot.")
+async def ping(ctx: discord.ApplicationContext):
     latency_ms = round(bot.latency * 1000)
-    await ctx.reply(f"Pong! 🏓\nLatensi saya {latency_ms} ms.")
+    await ctx.respond(f"Pong! 🏓\nLatensi saya {latency_ms} ms.")
 
-@bot.command(name="rules")
-async def rules(ctx):
-    """Menampilkan peraturan server HEYN4S."""
+@bot.slash_command(name="rules", description="Menampilkan peraturan server HEYN4S.")
+async def rules(ctx: discord.ApplicationContext):
     embed = discord.Embed(
         title="📜 Peraturan Server HEYN4S",
         description="Berikut adalah peraturan yang wajib dipatuhi:",
         color=discord.Color.gold()
     )
-    
-    # --- GANTI ATURAN ANDA DI SINI ---
-    embed.add_field(name="1. Jaga Bahasa", value="Bebas ngomong apa aja asal jangan berlebihan", inline=False)
+    embed.add_field(name="1. Jaga Bahasa", value="Dilarang berkata kasar, SARA, atau mem-bully member lain.", inline=False)
     embed.add_field(name="2. Dilarang Spam", value="Jangan mengirim spam, promosi, atau link aneh di luar channel yang disediakan.", inline=False)
     embed.add_field(name="3. No NSFW", value="Dilarang keras memposting konten 18+.", inline=False)
     embed.add_field(name="4. Gunakan Channel Semestinya", value="Post di channel yang sesuai dengan topiknya.", inline=False)
-    # --- AKHIR GANTI ATURAN ---
-    
     embed.set_footer(text="Terima kasih atas kerja samanya!")
+    await ctx.respond(embed=embed)
+
+# --- ⬇️ FITUR BARU: Perintah /help ⬇️ ---
+@bot.slash_command(name="help", description="Menampilkan daftar perintah bot.")
+async def help(ctx: discord.ApplicationContext):
+    embed = discord.Embed(
+        title="🤖 Bantuan Perintah Bot HEYN4S",
+        description="Berikut adalah daftar perintah yang bisa Anda gunakan:",
+        color=discord.Color.blue()
+    )
     
-    await ctx.reply(embed=embed)
+    embed.add_field(
+        name="Perintah Slash (/)", 
+        value="Gunakan `/` untuk perintah utilitas server.\n\n"
+              "• `/help`: Menampilkan pesan bantuan ini.\n"
+              "• `/ping`: Cek kecepatan respons bot.\n"
+              "• `/rules`: Menampilkan peraturan server.",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="Perintah AI (!)",
+        value="Gunakan `!` untuk bertanya kepada AI.\n\n"
+              "• `! [pertanyaan]`: Mengajukan pertanyaan ke AI.\n"
+              "*(Contoh: `!siapa penemu listrik`)*\n\n"
+              "**Status:** ⚠️ **(Sedang Dalam Perbaikan)**\n*Kami sedang memperbaiki koneksi API, mohon coba lagi nanti.*",
+        inline=False
+    )
+    
+    embed.set_footer(text="Bot HEYN4S v1.1")
+    await ctx.respond(embed=embed)
 
-# --- ⬆️ AKHIR FITUR BARU ⬆️ ---
-
-
-# --- LOGIKA LAMA: Menangani Pesan (Prefix '!') ---
-# (Ini akan menangani AI yang error)
+# --- ⬆️ AKHIR FITUR  ⬆️ ---
 @bot.event
 async def on_message(message):
     if message.author == bot.user or isinstance(message.channel, discord.DMChannel):
         return
 
-    # 1. PENTING: Jalankan perintah kustom dulu (!ping, !rules)
-    # Jika pesan adalah !ping atau !rules, bot akan menjalankannya dan berhenti di sini.
-    await bot.process_commands(message)
+    # Cek 2: Jika pesan dimulai dengan '!', ini UNTUK AI
+    if message.content.startswith("!"):
+        
+        # --- PESAN MAINTENANCE ---
+        # Bot akan langsung balas ini dan berhenti.
+        embed = discord.Embed(
+            title="⚙️ Fitur AI (Under Maintenance)",
+            description="Maaf, fitur AI saat ini sedang dalam perbaikan dan tidak tersedia.\n\n"
+                        "Kami sedang memperbaiki masalah koneksi API (Groq/Gemini/OpenAI). Mohon coba lagi nanti.",
+            color=discord.Color.orange()
+        )
+        embed.set_footer(text="Terima kasih atas kesabaran Anda!")
+        await message.reply(embed=embed)
+        return
+        # --- AKHIR PESAN MAINTENANCE ---
 
-    # 2. Jika BUKAN perintah kustom (dan dimulai dgn !), jalankan AI
-    # Kita cek apakah perintahnya sudah ditangani. Jika belum, baru jalankan AI.
-    if message.content.startswith("!") and not message.content.strip().split()[0][1:] in [cmd.name for cmd in bot.commands]:
+        # -----------------------------------------------------------------
+        # KODE AI LAMA DI BAWAH INI SEKARANG TIDAK AKAN PERNAH DIJALANKAN
+        # KITA BIARKAN SAJA SAMPAI NANTI KITA PERBAIKI API-NYA
+        # -----------------------------------------------------------------
         
         pertanyaan = message.content[1:].strip()
         if not pertanyaan:
@@ -137,72 +155,31 @@ async def on_message(message):
             # 1. Coba Groq
             if groq_client:
                 try:
-                    print(f"Mencoba Groq untuk: {pertanyaan}")
-                    response = groq_client.chat.completions.create(
-                        model="mixtral-8x7b-32768", # Model Mixtral
-                        messages=[{"role": "user", "content": pertanyaan}]
-                    )
-                    if response.choices and response.choices[0].message.content:
-                        jawaban_ai = response.choices[0].message.content
-                        sumber_ai = "Groq (Mixtral)"
+                    # (Kode Groq lama...)
                 except Exception as e_groq:
-                    print(f"ERROR Groq Gagal: {e_groq}")
-                    error_log['Groq'] = str(e_groq)
+                    # (Kode error Groq lama...)
+                    pass # Abaikan saja
 
             # 2. Coba Gemini
             if jawaban_ai is None and gemini_model:
                 try:
-                    print(f"Groq gagal, mencoba fallback Gemini...")
-                    response = await gemini_model.generate_content_async(pertanyaan)
-                    if response.parts:
-                        jawaban_ai = response.text
-                        sumber_ai = "Gemini"
-                    else:
-                        print("Peringatan: Respons Gemini kosong (filter).")
+                    # (Kode Gemini lama...)
                 except Exception as e_gemini:
-                    print(f"ERROR Gemini Gagal: {e_gemini}")
-                    error_log['Gemini'] = str(e_gemini)
+                    # (Kode error Gemini lama...)
+                    pass # Abaikan saja
 
             # 3. Coba OpenAI
             if jawaban_ai is None and openai_client:
                 try:
-                    print(f"Gemini gagal, mencoba fallback OpenAI...")
-                    response = openai_client.chat.completions.create(
-                        model="gpt-3.5-turbo",
-                        messages=[{"role": "user", "content": pertanyaan}]
-                    )
-                    if response.choices and response.choices[0].message.content:
-                        jawaban_ai = response.choices[0].message.content
-                        sumber_ai = "ChatGPT"
+                    # (Kode OpenAI lama...)
                 except Exception as e_openai:
-                    print(f"ERROR OpenAI Gagal: {e_openai}")
-                    error_log['OpenAI'] = str(e_openai)
-
-            # 4. Jika Semua Gagal
-            if jawaban_ai is None or jawaban_ai.isspace():
-                jawaban_ai = f"Maaf, semua layanan AI sedang bermasalah atau tidak dikonfigurasi.\n`Error Groq: {error_log.get('Groq', 'N/A')}`\n`Error Gemini: {error_log.get('Gemini', 'N/A')}`\n`Error OpenAI: {error_log.get('OpenAI', 'N/A')}`"
-                sumber_ai = "Sistem"
-
-            # Kirim Jawaban
-            try:
-                embed = discord.Embed(
-                    title="🤔 Pertanyaan Anda:",
-                    description=f"```{pertanyaan}```",
-                    color=discord.Color.blue()
-                )
-                embed.add_field(
-                    name=f"🤖 Jawaban dari {sumber_ai}:",
-                    value=jawaban_ai[:4000],
-                    inline=False
-                )
-                embed.set_footer(text=f"Dijawab untuk: {message.author.display_name}")
-                await message.reply(embed=embed)
+                    # (Kode error OpenAI lama...)
+                    pass # Abaikan saja
             
-            except discord.errors.Forbidden:
-                print("ERROR: Bot tidak punya izin 'Embed Links'. Mengirim sebagai teks biasa.")
-                await message.reply(f"**Jawaban dari {sumber_ai}:**\n{jawaban_ai[:1900]}")
-            except Exception as e_send:
-                print(f"Error mengirim pesan Discord: {e_send}")
+            # ... (Sisa kode AI lama) ...
+
+# --- ⬆️ AKHIR PERUBAHAN 3 ⬆️ ---
+
 
 # --- Menjalankan Bot DAN Web Server ---
 if TOKEN:
