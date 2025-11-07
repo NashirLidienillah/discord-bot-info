@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 from flask import Flask
 from threading import Thread
 
+# --- Konfigurasi Web Server (Keep-Alive) ---
+# (Ini biarkan saja, sudah benar)
 app = Flask('')
 @app.route('/')
 def home():
@@ -21,6 +23,7 @@ def start_keep_alive():
 # --- Akhir Web Server ---
 
 # --- Muat Konfigurasi Bot & AI ---
+# (Ini semua biarkan saja, sudah benar)
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
@@ -66,6 +69,9 @@ async def on_ready():
     print('-----------------------------------------')
     activity = discord.Activity(type=discord.ActivityType.listening, name="perintah / dan !")
     await bot.change_presence(status=discord.Status.online, activity=activity)
+    # (print status AI biarkan saja)
+
+# --- Perintah Info (Slash Command) ---
 
 @bot.slash_command(name="ping", description="Cek latensi dan status bot.")
 async def ping(ctx: discord.ApplicationContext):
@@ -86,7 +92,6 @@ async def rules(ctx: discord.ApplicationContext):
     embed.set_footer(text="Terima kasih atas kerja samanya!")
     await ctx.respond(embed=embed)
 
-# --- ⬇️ FITUR BARU: Perintah /help ⬇️ ---
 @bot.slash_command(name="help", description="Menampilkan daftar perintah bot.")
 async def help(ctx: discord.ApplicationContext):
     embed = discord.Embed(
@@ -94,7 +99,6 @@ async def help(ctx: discord.ApplicationContext):
         description="Berikut adalah daftar perintah yang bisa Anda gunakan:",
         color=discord.Color.blue()
     )
-    
     embed.add_field(
         name="Perintah Slash (/)", 
         value="Gunakan `/` untuk perintah utilitas server.\n\n"
@@ -103,7 +107,6 @@ async def help(ctx: discord.ApplicationContext):
               "• `/rules`: Menampilkan peraturan server.",
         inline=False
     )
-    
     embed.add_field(
         name="Perintah AI (!)",
         value="Gunakan `!` untuk bertanya kepada AI.\n\n"
@@ -112,25 +115,23 @@ async def help(ctx: discord.ApplicationContext):
               "**Status:** ⚠️ **(Sedang Dalam Perbaikan)**\n*Kami sedang memperbaiki koneksi API, mohon coba lagi nanti.*",
         inline=False
     )
-    
     embed.set_footer(text="Bot HEYN4S v1.1")
     await ctx.respond(embed=embed)
 
-# --- ⬆️ AKHIR FITUR  ⬆️ ---
+
+# --- Fungsi on_message HANYA UNTUK AI (Dengan Pesan Maintenance) ---
 @bot.event
 async def on_message(message):
     if message.author == bot.user or isinstance(message.channel, discord.DMChannel):
         return
 
-    # Cek 2: Jika pesan dimulai dengan '!', ini UNTUK AI
     if message.content.startswith("!"):
         
         # --- PESAN MAINTENANCE ---
-        # Bot akan langsung balas ini dan berhenti.
         embed = discord.Embed(
             title="⚙️ Fitur AI (Under Maintenance)",
             description="Maaf, fitur AI saat ini sedang dalam perbaikan dan tidak tersedia.\n\n"
-                        "Kami sedang memperbaiki masalah koneksi API (Groq/Gemini/OpenAI). Mohon coba lagi nanti.",
+                        "gua masih perbaiki masalah koneksi API (Groq/Gemini/OpenAI). cobanya ntar lagi yaa. (911 whats ur emergency?)",
             color=discord.Color.orange()
         )
         embed.set_footer(text="Terima kasih atas kesabaran Anda!")
@@ -139,8 +140,7 @@ async def on_message(message):
         # --- AKHIR PESAN MAINTENANCE ---
 
         # -----------------------------------------------------------------
-        # KODE AI LAMA DI BAWAH INI SEKARANG TIDAK AKAN PERNAH DIJALANKAN
-        # KITA BIARKAN SAJA SAMPAI NANTI KITA PERBAIKI API-NYA
+        # KODE AI LAMA (Tidak dijalankan, tapi sudah diperbaiki syntax-nya)
         # -----------------------------------------------------------------
         
         pertanyaan = message.content[1:].strip()
@@ -155,31 +155,25 @@ async def on_message(message):
             # 1. Coba Groq
             if groq_client:
                 try:
-                    # (Kode Groq lama...)
+                    pass # <-- PERBAIKAN: Ditambahkan pass agar 'try' tidak kosong
                 except Exception as e_groq:
-                    # (Kode error Groq lama...)
                     pass # Abaikan saja
 
             # 2. Coba Gemini
             if jawaban_ai is None and gemini_model:
                 try:
-                    # (Kode Gemini lama...)
+                    pass # <-- PERBAIKAN: Ditambahkan pass agar 'try' tidak kosong
                 except Exception as e_gemini:
-                    # (Kode error Gemini lama...)
                     pass # Abaikan saja
 
             # 3. Coba OpenAI
             if jawaban_ai is None and openai_client:
                 try:
-                    # (Kode OpenAI lama...)
+                    pass # <-- PERBAIKAN: Ditambahkan pass agar 'try' tidak kosong
                 except Exception as e_openai:
-                    # (Kode error OpenAI lama...)
                     pass # Abaikan saja
             
             # ... (Sisa kode AI lama) ...
-
-# --- ⬆️ AKHIR PERUBAHAN 3 ⬆️ ---
-
 
 # --- Menjalankan Bot DAN Web Server ---
 if TOKEN:
