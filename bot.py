@@ -3,13 +3,13 @@ import discord
 import google.generativeai as genai
 import openai
 import groq
+import replicate  # <-- IMPORT BARU
 from discord.ext import commands
 from dotenv import load_dotenv
 from flask import Flask
 from threading import Thread
 
 # --- Konfigurasi Web Server (Keep-Alive) ---
-# (Ini biarkan saja, sudah benar)
 app = Flask('')
 @app.route('/')
 def home():
@@ -23,43 +23,38 @@ def start_keep_alive():
 # --- Akhir Web Server ---
 
 # --- Muat Konfigurasi Bot & AI ---
-# (Ini semua biarkan saja, sudah benar)
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-GROQ_API_KEY = os.getenv('GROQ_API_KEY') 
+GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+REPLICATE_API_TOKEN = os.getenv('REPLICATE_API_TOKEN') # <-- KEY BARU
 
-# --- Konfigurasi AI (Gemini) ---
+# --- Konfigurasi AI (Semua) ---
 try:
     genai.configure(api_key=GEMINI_API_KEY)
-    gemini_model = genai.GenerativeModel('gemini-1.0-pro') # Model stabil
-    print("Model AI (Gemini) berhasil dikonfigurasi.")
-except Exception as e:
-    print(f"ERROR: Gagal mengkonfigurasi Gemini AI: {e}")
-    gemini_model = None
-
-# --- Konfigurasi AI (Groq) ---
+    gemini_model = genai.GenerativeModel('gemini-1.0-pro')
+except Exception: gemini_model = None
 try:
-    if GROQ_API_KEY:
-        groq_client = groq.Groq(api_key=GROQ_API_KEY)
-        print("Model AI (Groq) berhasil dikonfigurasi.")
-    else:
-        groq_client = None
-except Exception as e:
-    print(f"ERROR: Gagal mengkonfigurasi Groq: {e}")
-    groq_client = None
-
-# --- Konfigurasi AI (OpenAI) ---
+    if OPENAI_API_KEY: openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
+    else: openai_client = None
+except Exception: openai_client = None
 try:
-    if OPENAI_API_KEY:
-        openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
-        print("Model AI (OpenAI) berhasil dikonfigurasi.")
+    if GROQ_API_KEY: groq_client = groq.Groq(api_key=GROQ_API_KEY)
+    else: groq_client = None
+except Exception: groq_client = None
+try:
+    if REPLICATE_API_TOKEN:
+        replicate_client = replicate.Client(api_token=REPLICATE_API_TOKEN)
+        # ID Model Llama 3 8B di Replicate
+        REPLICATE_MODEL_ID = "meta/meta-llama-3-8b-instruct" 
+        print("Model AI (Replicate) berhasil dikonfigurasi.")
     else:
-        openai_client = None
+        replicate_client = None
+        print("PERINGATAN: REPLICATE_API_TOKEN tidak diatur.")
 except Exception as e:
-    print(f"ERROR: Gagal mengkonfigurasi OpenAI: {e}")
-    openai_client = None
+    print(f"ERROR: Gagal mengkonfigurasi Replicate: {e}")
+    replicate_client = None
 # --- Akhir Konfigurasi ---
 
 
@@ -89,7 +84,6 @@ async def on_member_join(member):
     member_count = guild.member_count
     activity = discord.Activity(type=discord.ActivityType.watching, name=f"{member_count} member di HEYN4S")
     await bot.change_presence(status=discord.Status.online, activity=activity)
-    print(f"Member baru bergabung, status diupdate: {member_count} member.")
 
 @bot.event
 async def on_member_leave(member):
@@ -97,7 +91,6 @@ async def on_member_leave(member):
     member_count = guild.member_count
     activity = discord.Activity(type=discord.ActivityType.watching, name=f"{member_count} member di HEYN4S")
     await bot.change_presence(status=discord.Status.online, activity=activity)
-    print(f"Member keluar, status diupdate: {member_count} member.")
 
 # --- Perintah Info (Prefix '!') ---
 @bot.command(name="ping")
@@ -120,7 +113,7 @@ async def help(ctx):
     embed = discord.Embed(title="🤖 Bantuan Perintah Bot HEYN4S", description="Gunakan tanda seru `!` di depan perintah.\nContoh: `!ping`", color=discord.Color.blue())
     embed.add_field(name="Perintah Utilitas", value="• `!help`: Menampilkan pesan bantuan ini.\n• `!ping`: Cek kecepatan respons bot.\n• `!rules`: Menampilkan peraturan server.", inline=False)
     embed.add_field(name="Perintah AI", value="• `! [pertanyaan]`: Mengajukan pertanyaan ke AI.\n*(Contoh: `!siapa penemu listrik`)*\n\n**Status:** ✅ **(Online)**", inline=False)
-    embed.set_footer(text="Bot HEYN4S v1.3")
+    embed.set_footer(text="Bot HEYN4S v1.4 - Powered by Replicate")
     await ctx.reply(embed=embed)
 
 # --- `on_message` DENGAN AI AKTIF ---
@@ -147,15 +140,29 @@ async def on_message(message):
             sumber_ai = "Tidak diketahui"
             error_log = {}
 
-            # --- LOGIKA FALLBACK AI ---
+            # --- LOGIKA PRIORITAS AI (REPLICATE #1) ---
             
-            # 1. Coba Groq (Prioritas Utama)
-            if groq_client:
+            # 1. Prioritas 1: Coba Replicate (Llama 3)
+            if replicate_client:
                 try:
-                    print(f"Mencoba Groq untuk: {pertanyaan}")
+                    print(f"Mencoba Replicate untuk: {pertanyaan}")
+                    output = replicate_client.run(
+                        REPLICATE_MODEL_ID,
+                        input={"prompt": pertanyaan}
+                    )
+                    # Output Replicate adalah generator, kita gabungkan
+                    jawaban_ai = "".join(output)
+                    sumber_ai = "Replicate (Llama 3)"
+                except Exception as e_replicate:
+                    print(f"ERROR Replicate Gagal: {e_replicate}")
+                    error_log['Replicate'] = str(e_replicate)
+
+            # 2. Jika Replicate Gagal, Coba Groq
+            if jawaban_ai is None and groq_client:
+                try:
+                    print(f"Replicate gagal, mencoba fallback Groq...")
                     response = groq_client.chat.completions.create(
-                        # ⬇️ MODEL BARU YANG STABIL ⬇️
-                        model="llama3-70b-8192", 
+                        model="llama3-70b-8192", # Model Groq baru yang stabil
                         messages=[{"role": "user", "content": pertanyaan}]
                     )
                     if response.choices and response.choices[0].message.content:
@@ -165,7 +172,7 @@ async def on_message(message):
                     print(f"ERROR Groq Gagal: {e_groq}")
                     error_log['Groq'] = str(e_groq)
 
-            # 2. Jika Groq Gagal, Coba Gemini
+            # 3. Jika Groq Gagal, Coba Gemini
             if jawaban_ai is None and gemini_model:
                 try:
                     print(f"Groq gagal, mencoba fallback Gemini...")
@@ -177,24 +184,9 @@ async def on_message(message):
                     print(f"ERROR Gemini Gagal: {e_gemini}")
                     error_log['Gemini'] = str(e_gemini)
 
-            # 3. Jika Gemini Gagal, Coba OpenAI
-            if jawaban_ai is None and openai_client:
-                try:
-                    print(f"Gemini gagal, mencoba fallback OpenAI...")
-                    response = openai_client.chat.completions.create(
-                        model="gpt-3.5-turbo",
-                        messages=[{"role": "user", "content": pertanyaan}]
-                    )
-                    if response.choices and response.choices[0].message.content:
-                        jawaban_ai = response.choices[0].message.content
-                        sumber_ai = "ChatGPT"
-                except Exception as e_openai:
-                    print(f"ERROR OpenAI Gagal: {e_openai}")
-                    error_log['OpenAI'] = str(e_openai)
-
             # 4. Jika Semua Gagal
             if jawaban_ai is None or jawaban_ai.isspace():
-                jawaban_ai = f"Maaf, semua layanan AI sedang bermasalah.\n`Error Groq: {error_log.get('Groq', 'N/A')}`\n`Error Gemini: {error_log.get('Gemini', 'N/A')}`\n`Error OpenAI: {error_log.get('OpenAI', 'N/A')}`"
+                jawaban_ai = f"Maaf, semua layanan AI sedang bermasalah.\n`Error Replicate: {error_log.get('Replicate', 'N/A')}`\n`Error Groq: {error_log.get('Groq', 'N/A')}`\n`Error Gemini: {error_log.get('Gemini', 'N/A')}`"
                 sumber_ai = "Sistem"
             # --- Akhir Logika ---
 
