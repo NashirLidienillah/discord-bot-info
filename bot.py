@@ -1,6 +1,6 @@
 import os
 import discord
-import replicate  # <-- FOKUS KITA
+import openai  # <-- Kita pakai ini untuk MaiaRouter
 from discord.ext import commands
 from dotenv import load_dotenv
 from flask import Flask
@@ -19,23 +19,25 @@ def start_keep_alive():
     t.start()
 # --- Akhir Web Server ---
 
-# --- Muat Konfigurasi Bot & AI ---
+# --- Muat Konfigurasi Bot ---
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
-REPLICATE_API_TOKEN = os.getenv('REPLICATE_API_TOKEN') # <-- HANYA INI YANG PENTING
 
-# --- Konfigurasi AI (HANYA REPLICATE) ---
+# --- Konfigurasi AI (MAIAROUTER) ---
 try:
-    if REPLICATE_API_TOKEN:
-        replicate_client = replicate.Client(api_token=REPLICATE_API_TOKEN)
-        REPLICATE_MODEL_ID = "meta/meta-llama-3-8b-instruct" 
-        print("Model AI (Replicate) berhasil dikonfigurasi.")
-    else:
-        replicate_client = None
-        print("PERINGATAN: REPLICATE_API_TOKEN tidak diatur.")
+    # API Key bisa diisi apa saja, 'sk-' sudah cukup
+    # 'base_url' adalah bagian yang paling penting
+    MAIA_API_KEY = "sk-maia-free-for-all" 
+    MAIA_BASE_URL = "https://maia.router.litellm.ai" # Endpoint MaiaRouter
+
+    maia_client = openai.OpenAI(
+        api_key=MAIA_API_KEY,
+        base_url=MAIA_BASE_URL
+    )
+    print("Model AI (MaiaRouter) berhasil dikonfigurasi.")
 except Exception as e:
-    print(f"ERROR: Gagal mengkonfigurasi Replicate: {e}")
-    replicate_client = None
+    print(f"ERROR: Gagal mengkonfigurasi MaiaRouter: {e}")
+    maia_client = None
 # --- Akhir Konfigurasi ---
 
 
@@ -93,11 +95,11 @@ async def rules(ctx):
 async def help(ctx):
     embed = discord.Embed(title="🤖 Bantuan Perintah Bot HEYN4S", description="Gunakan tanda seru `!` di depan perintah.\nContoh: `!ping`", color=discord.Color.blue())
     embed.add_field(name="Perintah Utilitas", value="• `!help`: Menampilkan pesan bantuan ini.\n• `!ping`: Cek kecepatan respons bot.\n• `!rules`: Menampilkan peraturan server.", inline=False)
-    embed.add_field(name="Perintah AI", value="• `! [pertanyaan]`: Mengajukan pertanyaan ke AI.\n*(Contoh: `!siapa penemu listrik`)*\n\n**Status:** ✅ **(Online - Menggunakan Replicate)**", inline=False)
-    embed.set_footer(text="Bot HEYN4S v1.5 - Powered by Replicate")
+    embed.add_field(name="Perintah AI", value="• `! [pertanyaan]`: Mengajukan pertanyaan ke AI.\n*(Contoh: `!siapa penemu listrik`)*\n\n**Status:** ✅ **(Online - Powered by MaiaRouter)**", inline=False)
+    embed.set_footer(text="Bot HEYN4S v1.7 - Powered by MaiaRouter")
     await ctx.reply(embed=embed)
 
-# --- `on_message` DENGAN FOKUS HANYA PADA REPLICATE ---
+# --- `on_message` DENGAN FOKUS HANYA PADA MAIAROUTER ---
 @bot.event
 async def on_message(message):
     if message.author == bot.user or isinstance(message.channel, discord.DMChannel):
@@ -118,25 +120,34 @@ async def on_message(message):
 
         async with message.channel.typing():
             jawaban_ai = None
-            sumber_ai = "Tidak diketahui"
+            sumber_ai = "MaiaRouter"
 
-            # --- HANYA MENCOBA REPLICATE ---
-            if replicate_client:
+            # --- HANYA MENCOBA MAIAROUTER ---
+            if maia_client:
                 try:
-                    print(f"Mencoba Replicate untuk: {pertanyaan}")
-                    output = replicate_client.run(
-                        REPLICATE_MODEL_ID,
-                        input={"prompt": pertanyaan}
+                    print(f"Mencoba MaiaRouter untuk: {pertanyaan}")
+                    
+                    # Kita harus menjalankan ini di 'executor' agar tidak memblokir bot
+                    # karena library 'openai' tidak 'async'
+                    response = await bot.loop.run_in_executor(
+                        None, 
+                        lambda: maia_client.chat.completions.create(
+                            model="gpt-3.5-turbo", # MaiaRouter akan meneruskannya
+                            messages=[{"role": "user", "content": pertanyaan}]
+                        )
                     )
-                    jawaban_ai = "".join(output)
-                    sumber_ai = "Replicate (Llama 3)"
-                except Exception as e_replicate:
-                    print(f"ERROR Replicate Gagal: {e_replicate}")
-                    jawaban_ai = f"Maaf, layanan AI (Replicate) gagal merespons.\n`Error: {e_replicate}`"
+
+                    if response.choices and response.choices[0].message.content:
+                        jawaban_ai = response.choices[0].message.content
+                    else:
+                        jawaban_ai = "Maaf, MaiaRouter merespons dengan jawaban kosong."
+
+                except Exception as e_maia:
+                    print(f"ERROR MaiaRouter Gagal: {e_maia}")
+                    jawaban_ai = f"Maaf, layanan AI (MaiaRouter) gagal merespons.\n`Error: {e_maia}`"
             else:
-                jawaban_ai = "Maaf, layanan AI (Replicate) tidak dikonfigurasi. Cek REPLICATE_API_TOKEN di Koyeb."
+                jawaban_ai = "Maaf, layanan AI (MaiaRouter) tidak dikonfigurasi."
             
-            sumber_ai = "Sistem" # Set ke sistem jika ada error
             # --- AKHIR LOGIKA ---
 
             # Kirim Jawaban
