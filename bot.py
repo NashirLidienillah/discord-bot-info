@@ -1,9 +1,6 @@
 import os
 import discord
-import google.generativeai as genai
-import openai
-import groq
-import replicate  # <-- IMPORT BARU
+import replicate  # <-- FOKUS KITA
 from discord.ext import commands
 from dotenv import load_dotenv
 from flask import Flask
@@ -25,28 +22,12 @@ def start_keep_alive():
 # --- Muat Konfigurasi Bot & AI ---
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-GROQ_API_KEY = os.getenv('GROQ_API_KEY')
-REPLICATE_API_TOKEN = os.getenv('REPLICATE_API_TOKEN') # <-- KEY BARU
+REPLICATE_API_TOKEN = os.getenv('REPLICATE_API_TOKEN') # <-- HANYA INI YANG PENTING
 
-# --- Konfigurasi AI (Semua) ---
-try:
-    genai.configure(api_key=GEMINI_API_KEY)
-    gemini_model = genai.GenerativeModel('gemini-1.0-pro')
-except Exception: gemini_model = None
-try:
-    if OPENAI_API_KEY: openai_client = openai.OpenAI(api_key=OPENAI_API_KEY)
-    else: openai_client = None
-except Exception: openai_client = None
-try:
-    if GROQ_API_KEY: groq_client = groq.Groq(api_key=GROQ_API_KEY)
-    else: groq_client = None
-except Exception: groq_client = None
+# --- Konfigurasi AI (HANYA REPLICATE) ---
 try:
     if REPLICATE_API_TOKEN:
         replicate_client = replicate.Client(api_token=REPLICATE_API_TOKEN)
-        # ID Model Llama 3 8B di Replicate
         REPLICATE_MODEL_ID = "meta/meta-llama-3-8b-instruct" 
         print("Model AI (Replicate) berhasil dikonfigurasi.")
     else:
@@ -61,7 +42,7 @@ except Exception as e:
 # --- Inisialisasi Bot ---
 intents = discord.Intents.default()
 intents.message_content = True
-intents.members = True # Jangan lupa ini untuk member count
+intents.members = True 
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None) 
 
 # --- Event Bot (on_ready, member join/leave) ---
@@ -112,11 +93,11 @@ async def rules(ctx):
 async def help(ctx):
     embed = discord.Embed(title="🤖 Bantuan Perintah Bot HEYN4S", description="Gunakan tanda seru `!` di depan perintah.\nContoh: `!ping`", color=discord.Color.blue())
     embed.add_field(name="Perintah Utilitas", value="• `!help`: Menampilkan pesan bantuan ini.\n• `!ping`: Cek kecepatan respons bot.\n• `!rules`: Menampilkan peraturan server.", inline=False)
-    embed.add_field(name="Perintah AI", value="• `! [pertanyaan]`: Mengajukan pertanyaan ke AI.\n*(Contoh: `!siapa penemu listrik`)*\n\n**Status:** ✅ **(Online)**", inline=False)
-    embed.set_footer(text="Bot HEYN4S v1.4 - Powered by Replicate")
+    embed.add_field(name="Perintah AI", value="• `! [pertanyaan]`: Mengajukan pertanyaan ke AI.\n*(Contoh: `!siapa penemu listrik`)*\n\n**Status:** ✅ **(Online - Menggunakan Replicate)**", inline=False)
+    embed.set_footer(text="Bot HEYN4S v1.5 - Powered by Replicate")
     await ctx.reply(embed=embed)
 
-# --- `on_message` DENGAN AI AKTIF ---
+# --- `on_message` DENGAN FOKUS HANYA PADA REPLICATE ---
 @bot.event
 async def on_message(message):
     if message.author == bot.user or isinstance(message.channel, discord.DMChannel):
@@ -138,11 +119,8 @@ async def on_message(message):
         async with message.channel.typing():
             jawaban_ai = None
             sumber_ai = "Tidak diketahui"
-            error_log = {}
 
-            # --- LOGIKA PRIORITAS AI (REPLICATE #1) ---
-            
-            # 1. Prioritas 1: Coba Replicate (Llama 3)
+            # --- HANYA MENCOBA REPLICATE ---
             if replicate_client:
                 try:
                     print(f"Mencoba Replicate untuk: {pertanyaan}")
@@ -150,45 +128,16 @@ async def on_message(message):
                         REPLICATE_MODEL_ID,
                         input={"prompt": pertanyaan}
                     )
-                    # Output Replicate adalah generator, kita gabungkan
                     jawaban_ai = "".join(output)
                     sumber_ai = "Replicate (Llama 3)"
                 except Exception as e_replicate:
                     print(f"ERROR Replicate Gagal: {e_replicate}")
-                    error_log['Replicate'] = str(e_replicate)
-
-            # 2. Jika Replicate Gagal, Coba Groq
-            if jawaban_ai is None and groq_client:
-                try:
-                    print(f"Replicate gagal, mencoba fallback Groq...")
-                    response = groq_client.chat.completions.create(
-                        model="llama3-70b-8192", # Model Groq baru yang stabil
-                        messages=[{"role": "user", "content": pertanyaan}]
-                    )
-                    if response.choices and response.choices[0].message.content:
-                        jawaban_ai = response.choices[0].message.content
-                        sumber_ai = "Groq (Llama 3)"
-                except Exception as e_groq:
-                    print(f"ERROR Groq Gagal: {e_groq}")
-                    error_log['Groq'] = str(e_groq)
-
-            # 3. Jika Groq Gagal, Coba Gemini
-            if jawaban_ai is None and gemini_model:
-                try:
-                    print(f"Groq gagal, mencoba fallback Gemini...")
-                    response = await gemini_model.generate_content_async(pertanyaan)
-                    if response.parts:
-                        jawaban_ai = response.text
-                        sumber_ai = "Gemini"
-                except Exception as e_gemini:
-                    print(f"ERROR Gemini Gagal: {e_gemini}")
-                    error_log['Gemini'] = str(e_gemini)
-
-            # 4. Jika Semua Gagal
-            if jawaban_ai is None or jawaban_ai.isspace():
-                jawaban_ai = f"Maaf, semua layanan AI sedang bermasalah.\n`Error Replicate: {error_log.get('Replicate', 'N/A')}`\n`Error Groq: {error_log.get('Groq', 'N/A')}`\n`Error Gemini: {error_log.get('Gemini', 'N/A')}`"
-                sumber_ai = "Sistem"
-            # --- Akhir Logika ---
+                    jawaban_ai = f"Maaf, layanan AI (Replicate) gagal merespons.\n`Error: {e_replicate}`"
+            else:
+                jawaban_ai = "Maaf, layanan AI (Replicate) tidak dikonfigurasi. Cek REPLICATE_API_TOKEN di Koyeb."
+            
+            sumber_ai = "Sistem" # Set ke sistem jika ada error
+            # --- AKHIR LOGIKA ---
 
             # Kirim Jawaban
             try:
