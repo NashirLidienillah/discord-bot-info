@@ -16,7 +16,7 @@ bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 initial_cogs = [
     'cogs.events',
     'cogs.info',
-    'cogs.utility'
+    'cogs.utility',
     'cogs.admin'
 ]
 
