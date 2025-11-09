@@ -21,6 +21,7 @@ initial_cogs = [
     'cogs.events',
     'cogs.info',
     'cogs.utility'
+    'cogs.admin'
 ]
 
 # Memuat semua Cogs
