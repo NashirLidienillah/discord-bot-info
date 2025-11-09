@@ -1,18 +1,17 @@
 import discord
 from discord.ext import commands
-async def is_guild_owner(ctx):
-    return ctx.author.id == ctx.guild.owner_id
+
+NAMA_ROLE_ADMIN = "CEO" 
 
 class Admin(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # --- Perintah 1: Refresh Member Count ---
     @commands.command(name="refresh")
-    @commands.check(is_guild_owner) 
+    @commands.has_role(NAMA_ROLE_ADMIN)
     async def refresh_presence(self, ctx):
-        """(Owner) Me-refresh status hitungan member."""
-        print("Mencoba refresh member count (diminta by owner)...")
+        """(Admin) Me-refresh status hitungan member."""
+        print("Mencoba refresh member count (diminta by admin)...")
         try:
             guild = ctx.guild
             member_count = guild.member_count
@@ -22,22 +21,20 @@ class Admin(commands.Cog):
                 name=f"{member_count} member di HEYN4S"
             )
             await self.bot.change_presence(status=discord.Status.online, activity=activity)
+            
             await ctx.reply("✅ Status *member count* berhasil di-refresh!", delete_after=10)
             await ctx.message.delete(delay=10)
-            # --- AKHIR PERUBAHAN ---
 
         except Exception as e:
             await ctx.reply(f"Gagal refresh: {e}")
 
-    # --- Error Handler untuk Perintah Admin ---
-    @commands.Cog.listener()
-    async def on_command_error(self, ctx, error):
-        if ctx.cog is not self:
-            return 
-            
-        if isinstance(error, commands.CheckFailure):
-            await ctx.reply("Maaf, perintah ini hanya untuk Owner Server.", delete_after=10)
+    @refresh_presence.error 
+    async def refresh_error(self, ctx, error):
+        if isinstance(error, commands.MissingRole):
+            await ctx.reply(f"Maaf, perintah ini hanya untuk member dengan role `{NAMA_ROLE_ADMIN}`.", delete_after=10)
             await ctx.message.delete(delay=10)
+        else:
+            await ctx.reply(f"Terjadi error: {error}")
 
 
 def setup(bot):
