@@ -42,7 +42,12 @@ class Info(commands.Cog):
             inline=False
         )
         
-        embed.set_footer(text="Bot HEYN4S v1.9 - Stabil")
+        embed.add_field(
+            name="🔒 Perintah Owner Server",
+            value="• `!refresh`: Memperbarui hitungan member di status bot.",
+            inline=False
+        )
+        embed.set_footer(text="Bot HEYN4S v2.1")
         await ctx.reply(embed=embed)
 
 def setup(bot):
