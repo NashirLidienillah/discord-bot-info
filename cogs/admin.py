@@ -1,7 +1,5 @@
 import discord
 from discord.ext import commands
-
-# Fungsi 'check' untuk memastikan hanya owner yang bisa
 async def is_guild_owner(ctx):
     return ctx.author.id == ctx.guild.owner_id
 
@@ -10,9 +8,8 @@ class Admin(commands.Cog):
         self.bot = bot
 
     # --- Perintah 1: Refresh Member Count ---
-    
     @commands.command(name="refresh")
-    @commands.check(is_guild_owner)
+    @commands.check(is_guild_owner) 
     async def refresh_presence(self, ctx):
         """(Owner) Me-refresh status hitungan member."""
         print("Mencoba refresh member count (diminta by owner)...")
@@ -25,9 +22,9 @@ class Admin(commands.Cog):
                 name=f"{member_count} member di HEYN4S"
             )
             await self.bot.change_presence(status=discord.Status.online, activity=activity)
-            
-            # Beri tahu owner bahwa perintah berhasil
-            await ctx.message.add_reaction("✅")
+            await ctx.reply("✅ Status *member count* berhasil di-refresh!", delete_after=10)
+            await ctx.message.delete(delay=10)
+            # --- AKHIR PERUBAHAN ---
 
         except Exception as e:
             await ctx.reply(f"Gagal refresh: {e}")
@@ -35,7 +32,6 @@ class Admin(commands.Cog):
     # --- Error Handler untuk Perintah Admin ---
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
-        # Cek apakah error ini ada di dalam cog 'Admin'
         if ctx.cog is not self:
             return 
             
