@@ -1,4 +1,28 @@
-@commands.command(name="help")
+from discord.ext import commands
+import discord
+
+class Info(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.command(name="ping")
+    async def ping(self, ctx):
+        """Cek latensi dan status bot."""
+        latency_ms = round(self.bot.latency * 1000)
+        await ctx.reply(f"Pong! 🏓\nLatensi saya {latency_ms} ms.")
+
+    @commands.command(name="rules")
+    async def rules(self, ctx):
+        """Menampilkan peraturan server HEYN4S."""
+        embed = discord.Embed(title="📜 Peraturan Server HEYN4S", description="Berikut adalah peraturan yang wajib dipatuhi:", color=discord.Color.gold())
+        embed.add_field(name="1. Jaga Bahasa", value="Dilarang berkata kasar, SARA, atau mem-bully member lain.", inline=False)
+        embed.add_field(name="2. Dilarang Spam", value="Jangan mengirim spam, promosi, atau link aneh di luar channel yang disediakan.", inline=False)
+        embed.add_field(name="3. No NSFW", value="Dilarang keras memposting konten 18+.", inline=False)
+        embed.add_field(name="4. Gunakan Channel Semestinya", value="Post di channel yang sesuai dengan topiknya.", inline=False)
+        embed.set_footer(text="Terima kasih atas kerja samanya!")
+        await ctx.reply(embed=embed)
+
+    @commands.command(name="help")
     async def help(self, ctx):
         """Menampilkan daftar perintah bot."""
         embed = discord.Embed(
@@ -18,7 +42,6 @@
             inline=False
         )
         
-        # --- PERUBAHAN DI SINI ---
         embed.add_field(
             name="🔒 Perintah Admin",
             value="• `!refresh`: Memperbarui hitungan member di status bot.\n"
@@ -26,7 +49,9 @@
                   "• `!say [channel] [pesan]`: Mengirim pengumuman (contoh: `!say #pengumuman halo semua`).",
             inline=False
         )
-        # --- AKHIR PERUBAHAN ---
         
         embed.set_footer(text="Bot HEYN4S v2.2 - Stabil")
         await ctx.reply(embed=embed)
+
+def setup(bot):
+    bot.add_cog(Info(bot))
