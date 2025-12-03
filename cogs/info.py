@@ -34,6 +34,9 @@ class Info(commands.Cog):
         embed.add_field(
             name="Perintah Utilitas", 
             value="• `!help`: Menampilkan pesan bantuan ini.\n"
+                    "• `!avatar @user : Lihat Foto Profil.\n"
+                    "• `!userinfo @user : Cek Info Akun. \n"
+                    "• `!remind [menit] [pesan] : Pasang Alarm. \n"
                   "• `!ping`: Cek kecepatan respons bot.\n"
                   "• `!rules`: Menampilkan peraturan server.\n"
                   "• `!poll [pertanyaan]`: Membuat voting Ya/Tidak.\n"
@@ -43,6 +46,16 @@ class Info(commands.Cog):
         )
         
         embed.add_field(
+            name=" Game"
+            value="• `!math : Game Matematika.\n"
+                    "• `!jodoh @user : Cek Jodoh.\n"
+                    "• `!rate [hal] : Rating.\n"
+                    "• `!dadu : Duel Dadu.\n"
+                    "• `!suit : `!slots`, `!koin`, `!bola8`,\n"
+        )
+
+
+        embed.add_field(
             name="🔒 Perintah Admin",
             value="• `!refresh`: Memperbarui hitungan member di status bot.\n"
                   "• `!clear [jumlah]`: Menghapus pesan (contoh: `!clear 5`).\n"
@@ -50,7 +63,7 @@ class Info(commands.Cog):
             inline=False
         )
         
-        embed.set_footer(text="Bot HEYN4S v2.2 - Stabil")
+        embed.set_footer(text="Bot HEYN4S v2.3 - Stabil")
         await ctx.reply(embed=embed)
 
 def setup(bot):

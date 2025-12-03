@@ -18,6 +18,7 @@ initial_cogs = [
     'cogs.info',
     'cogs.utility',
     'cogs.admin'
+    'cogs.tools'
 ]
 
 print("Memuat cogs...")
